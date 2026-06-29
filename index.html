@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Card Chess Variant</title>
+    <style>
+        :root {
+            --bg-color: #121216;
+            --panel-color: #1c1c24;
+            --board-light: #eaecd0;
+            --board-dark: #739552;
+            --accent-color: #f39c12;
+            --text-light: #ffffff;
+            --text-dark: #888899;
+            --shield-color: #00bfff;
+            --camo-color: #2ecc71;
+            --mine-color: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            max-width: 1100px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+
+        button {
+            background-color: var(--panel-color);
+            color: var(--text-light);
+            border: 2px solid #333;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: #000;
+        }
+
+        .game-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .status-panel {
+            background-color: var(--panel-color);
+            padding: 15px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            text-align: center;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border-bottom: 4px solid var(--accent-color);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 90vw;
+            height: 90vw;
+            max-width: 480px;
+            max-height: 480px;
+            border: 6px solid #222;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+        }
+
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.6rem;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+
+        @media (max-width: 480px) {
+            .square { font-size: 2.0rem; }
+        }
+
+        .light { background-color: var(--board-light); }
+        .dark { background-color: var(--board-dark); }
+
+        .selected { box-shadow: inset 0 0 0 4px #f1c40f; }
+        .highlighted::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background-color: rgba(241, 196, 15, 0.6);
+            border-radius: 50%;
+            position: absolute;
+        }
+        
+        /* Status Overlays */
+        .frozen::after { content: '❄️'; position: absolute; font-size: 0.9rem; bottom: 2px; right: 2px; }
+        .shielded { box-shadow: inset 0 0 0 4px var(--shield-color); }
+        .camouflaged { box-shadow: inset 0 0 0 4px var(--camo-color); }
+        .mined::before { content: '💣'; position: absolute; font-size: 0.9rem; top: 2px; left: 2px; opacity: 0.7; }
+
+        .side-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 450px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .card-section {
+            background-color: var(--panel-color);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .card-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            min-height: 80px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #2c2c38, #181822);
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            width: calc(50% - 5px);
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 12px rgba(243,156,18,0.2);
+        }
+
+        .card-title {
+            font-weight: bold;
+            color: var(--accent-color);
+            margin-bottom: 4px;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .draft-modal {
+            background-color: var(--panel-color);
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 550px;
+            width: 90%;
+            text-align: center;
+            border: 2px solid var(--accent-color);
+        }
+
+        .draft-options {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .draft-card {
+            background: linear-gradient(135deg, #3a3a4a, #20202a);
+            border: 2px solid #555;
+            padding: 12px;
+            border-radius: 8px;
+            width: 140px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .draft-card:hover {
+            border-color: var(--accent-color);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 id="ui-title">Ultimate Card Chess</h1>
+        <div class="controls">
+            <button id="lang-btn" onclick="toggleLanguage()">Language: EN</button>
+            <button id="mode-btn" onclick="toggleMode()">Mode: PvP</button>
+            <button id="reset-btn" onclick="initGame()">Reset Game</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="game-area">
+            <div class="status-panel" id="status-text">White's Turn</div>
+            <div class="board" id="board"></div>
+        </div>
+
+        <div class="side-panel">
+            <div class="card-section">
+                <h3 id="ui-white-cards">White's Hand</h3>
+                <div class="card-container" id="white-cards"></div>
+            </div>
+            <div class="card-section">
+                <h3 id="ui-black-cards">Black's Hand</h3>
+                <div class="card-container" id="black-cards"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="draft-overlay">
+        <div class="draft-modal">
+            <h2 id="ui-draft-title">Draft a Card!</h2>
+            <p id="ui-draft-subtitle">Choose one card to add to your hand.</p>
+            <div class="draft-options" id="draft-options"></div>
+        </div>
+    </div>
+
+    <script>
+        const i18n = {
+            en: {
+                title: "Ultimate Card Chess", modePvP: "Mode: PvP", modePvC: "Mode: vs AI", lang: "Language: EN",
+                whiteTurn: "White's Turn", blackTurn: "Black's Turn", whiteHand: "White's Hand", blackHand: "Black's Hand",
+                draftTitle: "Draft Phase", draftSubtitle: "Select an ability card to add to your arsenal.",
+                winWhite: "White wins by King Capture / Checkmate!", winBlack: "Black wins by King Capture / Checkmate!",
+                card1Name: "Freeze", card1Desc: "Freeze an enemy unit for one turn.",
+                card2Name: "Demote", card2Desc: "Degrade enemy Queen->Rook, or Rook->Knight.",
+                card3Name: "Reinforce", card3Desc: "Spawn a friendly Pawn on an empty home rank tile.",
+                card4Name: "Swap", card4Desc: "Swap spaces of two of your non-King units.",
+                card5Name: "Blink", card5Desc: "Teleport a friendly unit to an adjacent empty square.",
+                card6Name: "Pawn Sniper", card6Desc: "Instantly eliminate any enemy Pawn.",
+                card7Name: "Ascend", card7Desc: "Instantly convert one of your Pawns into a Knight.",
+                card8Name: "Spike Shield", card8Desc: "Shield a unit. If attacked, destroys the attacker instead.",
+                card9Name: "Camouflage", card9Desc: "Make an allied unit un-capturable until your next turn.",
+                card10Name: "Gust", card10Desc: "Push any unit into an adjacent empty space.",
+                card11Name: "Landmine", card11Desc: "Place a hidden trap on an empty tile. Explodes whoever steps on it.",
+                card12Name: "Alchemist", card12Desc: "Mutate one of your active Pawns into a Bishop."
+            },
+            ko: {
+                title: "얼티밋 카드 체스", modePvP: "모드: 플레이어 vs 플레이어", modePvC: "모드: 인공지능전", lang: "언어: KO",
+                whiteTurn: "백의 차례", blackTurn: "흑의 차례", whiteHand: "백의 카드 핸드", blackHand: "흑의 카드 핸드",
+                draftTitle: "카드 드래프트", draftSubtitle: "전술에 사용할 카드 한 장을 고르세요.",
+                winWhite: "백 승리! (왕 회수 또는 체크메이트)", winBlack: "흑 승리! (왕 회수 또는 체크메이트)",
+                card1Name: "빙결", card1Desc: "다음 턴에 적 유닛 하나를 이동 불가 상태로 만듭니다.",
+                card2Name: "강등", card2Desc: "적 퀸을 룩으로, 또는 룩을 나이트로 강등시킵니다.",
+                card3Name: "지원군", card3Desc: "자신의 후방 빈 공간에 폰 하나를 생성합니다.",
+                card4Name: "위치 교환", card4Desc: "왕을 제외한 자신의 기물 두 개의 위치를 서로 바꿉니다.",
+                card5Name: "점멸", card5Desc: "아군 기물 하나를 인접한 빈 칸으로 순간이동 시킵니다.",
+                card6Name: "폰 저격", card6Desc: "적의 폰 하나를 즉시 제거합니다.",
+                card7Name: "고속 승진", card7Desc: "자신의 폰 하나를 즉시 나이트로 바꿉니다.",
+                card8Name: "가시 방패", card8Desc: "아군 기물에 방패를 부여합니다. 적이 공격하면 적을 역파괴합니다.",
+                card9Name: "위장", card9Desc: "아군 기물 하나를 다음 자신의 턴까지 적이 잡을 수 없게 만듭니다.",
+                card10Name: "돌풍", card10Desc: "아무 기물이나 선택해 인접한 빈 스페이스로 1칸 밀쳐냅니다.",
+                card11Name: "지뢰", card11Desc: "빈 칸에 지뢰를 설치합니다. 누구든 이 칸을 밟으면 즉시 폭발해 사망합니다.",
+                card12Name: "연금술", card12Desc: "자신의 폰 하나를 즉시 비숍으로 변형시킵니다."
+            }
+        };
+
+        let currentLang = 'en'; let gameMode = 'PvP'; let boardState = []; let turn = 'W'; let moveCount = 0;
+        let selectedSquare = null; let validMoves = []; let gameOver = false; let hands = { W: [], B: [] };
+        let activeCardEffect = null; let frozenPieces = { W: null, B: null };
+        let shieldedSquares = Array(64).fill(false); let camoSquares = Array(64).fill(false); let mineSquares = Array(64).fill(false);
+
+        const CARD_TYPES = Array.from({length: 12}, (_, i) => ({ id: i + 1, keyName: `card${i+1}Name`, keyDesc: `card${i+1}Desc` }));
+        const piecesSymbols = {
+            'WR': '♖', 'WN': '♘', 'WB': '♗', 'WQ': '♕', 'WK': '♔', 'WP': '♙',
+            'BR': '♜', 'BN': '♞', 'BB': '♝', 'BQ': '♛', 'BK': '♚', 'BP': '♟', '': ''
+        };
+        const initialBoard = [
+            'BR', 'BN', 'BB', 'BQ', 'BK', 'BB', 'BN', 'BR', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP',
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+            'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WR', 'WN', 'WB', 'WQ', 'WK', 'WB', 'WN', 'WR'
+        ];
+
+        function toggleLanguage() { currentLang = currentLang === 'en' ? 'ko' : 'en'; updateUIStrings(); renderBoard(); renderHands(); }
+        function toggleMode() { gameMode = gameMode === 'PvP' ? 'PvC' : 'PvP'; initGame(); }
+        function updateUIStrings() {
+            const t = i18n[currentLang]; document.getElementById('ui-title').innerText = t.title;
+            document.getElementById('lang-btn').innerText = t.lang; document.getElementById('mode-btn').innerText = gameMode === 'PvP' ? t.modePvP : t.modePvC;
+            document.getElementById('ui-white-cards').innerText = t.whiteHand; document.getElementById('ui-black-cards').innerText = t.blackHand;
+            document.getElementById('ui-draft-title').innerText = t.draftTitle; document.getElementById('ui-draft-subtitle').innerText = t.draftSubtitle;
+            updateStatus();
+        }
+        function updateStatus() { if (gameOver) return; document.getElementById('status-text').innerText = `${turn === 'W' ? i18n[currentLang].whiteTurn : i18n[currentLang].blackTurn} (Move ${moveCount})`; }
+
+        function initGame() {
+            boardState = [...initialBoard]; turn = 'W'; moveCount = 0; selectedSquare = null; validMoves = []; gameOver = false; hands = { W: [], B: [] };
+            activeCardEffect = null; frozenPieces = { W: null, B: null }; shieldedSquares.fill(false); camoSquares.fill(false); mineSquares.fill(false);
+            updateUIStrings();
+            triggerDraft('W', () => { if (gameMode === 'PvC') hands.B.push(CARD_TYPES[Math.floor(Math.random() * 12)]); renderBoard(); renderHands(); });
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board'); boardEl.innerHTML = '';
+            for (let i = 0; i < 64; i++) {
+                const square = document.createElement('div'); const row = Math.floor(i / 8); const col = i % 8;
+                square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                square.innerText = piecesSymbols[boardState[i]] || '';
+                if (selectedSquare === i) square.classList.add('selected');
+                if (validMoves.includes(i)) square.classList.add('highlighted');
+                if (frozenPieces.W === i || frozenPieces.B === i) square.classList.add('frozen');
+                if (shieldedSquares[i]) square.classList.add('shielded');
+                if (camoSquares[i]) square.classList.add('camouflaged');
+                if (mineSquares[i]) square.classList.add('mined');
+                square.addEventListener('click', () => handleSquareClick(i));
+                boardEl.appendChild(square);
+            }
+        }
+
+        function renderHands() { renderHand('W', 'white-cards'); renderHand('B', 'black-cards'); }
+        function renderHand(player, id) {
+            const container = document.getElementById(id); container.innerHTML = '';
+            hands[player].forEach((card, idx) => {
+                const cardEl = document.createElement('div'); cardEl.className = 'card';
+                cardEl.innerHTML = `<div class="card-title">${i18n[currentLang][card.keyName]}</div><div>${i18n[currentLang][card.keyDesc]}</div>`;
+                cardEl.addEventListener('click', () => useCard(player, idx));
+                container.appendChild(cardEl);
+            });
+        }
+
+        function handleSquareClick(idx) {
+            if (gameOver) return;
+            if (activeCardEffect) { handleCardTargeting(idx); return; }
+            const piece = boardState[idx];
+            if (piece && piece[0] === turn && (frozenPieces.W === idx || frozenPieces.B === idx)) return;
+
+            if (selectedSquare === null) {
+                if (piece && piece[0] === turn) { selectedSquare = idx; validMoves = generateValidMoves(idx, boardState); renderBoard(); }
+            } else {
+                if (validMoves.includes(idx)) { executeMove(selectedSquare, idx); }
+                else if (piece && piece[0] === turn) { selectedSquare = idx; validMoves = generateValidMoves(idx, boardState); renderBoard(); }
+                else { selectedSquare = null; validMoves = []; renderBoard(); }
+            }
+        }
+
+        function executeMove(from, to) {
+            const movingPiece = boardState[from]; const targetPiece = boardState[to];
+            
+            if (targetPiece && camoSquares[to] && targetPiece[0] !== movingPiece[0]) {
+                selectedSquare = null; validMoves = []; renderBoard(); return; 
+            }
+            if (targetPiece && shieldedSquares[to] && targetPiece[0] !== movingPiece[0]) {
+                shieldedSquares[to] = false; boardState[from] = ''; selectedSquare = null; validMoves = []; switchTurn(); return;
+            }
+            if (targetPiece && (targetPiece === 'BK' || targetPiece === 'WK')) {
+                endGame(movingPiece[0]); boardState[to] = movingPiece; boardState[from] = ''; renderBoard(); return;
+            }
+
+            shieldedSquares[to] = shieldedSquares[from]; shieldedSquares[from] = false;
+            camoSquares[to] = camoSquares[from]; camoSquares[from] = false;
+            boardState[to] = movingPiece; boardState[from] = '';
+
+            if (mineSquares[to]) { boardState[to] = ''; mineSquares[to] = false; } // Landmine blows up stepping unit
+
+            if (movingPiece === 'WP' && Math.floor(to / 8) === 0) boardState[to] = 'WQ';
+            if (movingPiece === 'BP' && Math.floor(to / 8) === 7) boardState[to] = 'BQ';
+
+            frozenPieces[turn] = null; selectedSquare = null; validMoves = []; switchTurn();
+        }
+
+        function switchTurn() {
+            turn = turn === 'W' ? 'B' : 'W'; moveCount++;
+            for(let i=0; i<64; i++) { if(boardState[i] && boardState[i][0] === turn) camoSquares[i] = false; } // Expire active player's camo
+            updateStatus(); renderBoard();
+            if (moveCount === 8 || moveCount === 16) {
+                if (gameMode === 'PvP') { triggerDraft('W', () => { triggerDraft('B', () => { proceedTurn(); }); }); }
+                else { triggerDraft('W', () => { hands.B.push(CARD_TYPES[Math.floor(Math.random() * 12)]); proceedTurn(); }); }
+            } else { proceedTurn(); }
+        }
+        function proceedTurn() { if (turn === 'B' && gameMode === 'PvC' && !gameOver) setTimeout(makeAIMove, 600); }
+
+        function triggerDraft(player, callback) {
+            const overlay = document.getElementById('draft-overlay'); const container = document.getElementById('draft-options');
+            container.innerHTML = ''; let options = []; let pool = [...CARD_TYPES];
+            for (let i = 0; i < 3; i++) options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+            overlay.style.display = 'flex';
+            options.forEach(card => {
+                const opt = document.createElement('div'); opt.className = 'draft-card';
+                opt.innerHTML = `<div class="card-title">${i18n[currentLang][card.keyName]}</div><div style="font-size:0.75rem; margin-top:4px;">${i18n[currentLang][card.keyDesc]}</div>`;
+                opt.addEventListener('click', () => { hands[player].push(card); overlay.style.display = 'none'; renderHands(); callback(); });
+                container.appendChild(opt);
+            });
+        }
+
+        function useCard(player, idx) { if (!gameOver && turn === player) { activeCardEffect = { player, idx, card: hands[player][idx] }; } }
+
+        function handleCardTargeting(idx) {
+            const cardId = activeCardEffect.card.id; const player = activeCardEffect.player; const enemy = player === 'W' ? 'B' : 'W';
+            const piece = boardState[idx]; let success = false;
+
+            if (cardId === 1 && piece && piece[0] === enemy && piece[1] !== 'K') { frozenPieces[enemy] = idx; success = true; }
+            else if (cardId === 2 && piece && piece[0] === enemy) {
+                if (piece[1] === 'Q') { boardState[idx] = enemy + 'R'; success = true; }
+                else if (piece[1] === 'R') { boardState[idx] = enemy + 'N'; success = true; }
+            }
+            else if (cardId === 3 && !piece && Math.floor(idx / 8) === (player === 'W' ? 7 : 0)) { boardState[idx] = player + 'P'; success = true; }
+            else if (cardId === 4 && piece && piece[0] === player && piece[1] !== 'K') {
+                if (!activeCardEffect.swapSrc) { activeCardEffect.swapSrc = idx; selectedSquare = idx; renderBoard(); return; }
+                else if (activeCardEffect.swapSrc !== idx) {
+                    let tmp = boardState[activeCardEffect.swapSrc]; boardState[activeCardEffect.swapSrc] = boardState[idx]; boardState[idx] = tmp;
+                    success = true;
+                }
+            }
+            else if (cardId === 5 && piece && piece[0] === player) {
+                if (!activeCardEffect.blinkSrc) { activeCardEffect.blinkSrc = idx; selectedSquare = idx; renderBoard(); return; }
+                else if (!piece && Math.abs(Math.floor(activeCardEffect.blinkSrc/8) - Math.floor(idx/8)) <= 1 && Math.abs((activeCardEffect.blinkSrc%8) - (idx%8)) <= 1) {
+                    boardState[idx] = boardState[activeCardEffect.blinkSrc]; boardState[activeCardEffect.blinkSrc] = ''; success = true;
+                }
+            }
+            else if (cardId === 6 && piece && piece[0] === enemy && piece[1] === 'P') { boardState[idx] = ''; shieldedSquares[idx] = false; success = true; }
+            else if (cardId === 7 && piece && piece[0] === player && piece[1] === 'P') { boardState[idx] = player + 'N'; success = true; }
+            else if (cardId === 8 && piece && piece[0] === player) { shieldedSquares[idx] = true; success = true; }
+            else if (cardId === 9 && piece && piece[0] === player) { camoSquares[idx] = true; success = true; }
+            else if (cardId === 10 && piece) {
+                if (!activeCardEffect.gustSrc) { activeCardEffect.gustSrc = idx; selectedSquare = idx; renderBoard(); return; }
+                else if (!piece && Math.abs(Math.floor(activeCardEffect.gustSrc/8) - Math.floor(idx/8)) <= 1 && Math.abs((activeCardEffect.gustSrc%8) - (idx%8)) <= 1) {
+                    boardState[idx] = boardState[activeCardEffect.gustSrc]; boardState[activeCardEffect.gustSrc] = ''; success = true;
+                }
+            }
+            else if (cardId === 11 && !piece) { mineSquares[idx] = true; success = true; }
+            else if (cardId === 12 && piece && piece[0] === player && piece[1] === 'P') { boardState[idx] = player + 'B'; success = true; }
+
+            if (success) { hands[player].splice(activeCardEffect.idx, 1); }
+            activeCardEffect = null; selectedSquare = null; renderHands(); renderBoard();
+        }
+
+        function generateValidMoves(idx, state) {
+            const piece = state[idx]; if (!piece) return [];
+            const color = piece[0]; const type = piece[1]; const moves = [];
+            const row = Math.floor(idx / 8); const col = idx % 8;
+            const check = (r, c) => {
+                if (r < 0 || r >= 8 || c < 0 || c >= 8) return false; const t = r * 8 + c;
+                if (!state[t]) { moves.push(t); return true; } if (state[t][0] !== color && !camoSquares[t]) { moves.push(t); return false; } return false;
+            };
+            if (type === 'P') {
+                const d = color === 'W' ? -1 : 1;
+                if (row+d >= 0 && row+d < 8 && !state[(row+d)*8+col]) { moves.push((row+d)*8+col); if (row === (color === 'W' ? 6 : 1) && !state[(row+d*2)*8+col]) moves.push((row+d*2)*8+col); }
+                [-1, 1].forEach(dc => { if (col+dc >= 0 && col+dc < 8 && state[(row+d)*8+col+dc] && state[(row+d)*8+col+dc][0] !== color && !camoSquares[(row+d)*8+col+dc]) moves.push((row+d)*8+col+dc); });
+            } else if (type === 'N') {
+                [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr, dc]) => check(row + dr, col + dc));
+            } else if (type === 'B' || type === 'Q') {
+                [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr, dc]) => { let r=row+dr, c=col+dc; while(r>=0&&r<8&&c>=0&&c<8) { if(!check(r,c)) break; r+=dr; c+=dc; } });
+            }
+            if (type === 'R' || type === 'Q') {
+                [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr, dc]) => { let r=row+dr, c=col+dc; while(r>=0&&r<8&&c>=0&&c<8) { if(!check(r,c)) break; r+=dr; c+=dc; } });
+            } else if (type === 'K') {
+                for (let dr=-1; dr<=1; dr++) for (let dc=-1; dc<=1; dc++) if (dr!==0||dc!==0) check(row+dr, col+dc);
+            }
+            return moves;
+        }
+
+        function makeAIMove() {
+            if (gameOver) return;
+            if (hands.B.length > 0 && Math.random() < 0.25) {
+                let p = []; for(let i=0; i<64; i++) if(boardState[i] && boardState[i][0]==='W') p.push(i);
+                if(p.length > 0) { frozenPieces.W = p[Math.floor(Math.random()*p.length)]; hands.B.splice(0,1); renderHands(); }
+            }
+            let moves = [];
+            for (let i=0; i<64; i++) { if (boardState[i] && boardState[i][0]==='B' && frozenPieces.B!==i) generateValidMoves(i, boardState).forEach(to => moves.push({from:i, to:to, val: (boardState[to]?10:0)})); }
+            if (moves.length === 0) { endGame('W'); return; }
+            moves.sort((a,b)=> b.val - a.val); executeMove(moves[0].from, moves[0].to);
+        }
+
+        function endGame(w) { gameOver = true; document.getElementById('status-text').innerText = w === 'W' ? i18n[currentLang].winWhite : i18n[currentLang].winBlack; alert(document.getElementById('status-text').innerText); }
+        window.onload = initGame;
+    </script>
+</body>
+</html>

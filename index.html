@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paradox Chess: Network Edition</title>
+    <!-- PeerJS CDN for Serverless Cross-Device Multiplayer Connection -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0a0b10;
+            --panel-bg: rgba(23, 25, 35, 0.65);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --board-light: #e2e8f0;
+            --board-dark: #4a5568;
+            --accent-glow: #3182ce;
+            --accent-gold: #ecc94b;
+            --text-main: #f7fafc;
+            --card-back: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Clean Menu Screen & Network Overlays */
+        #menu-screen {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            height: 80vh;
+            text-align: center;
+        }
+
+        .menu-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        input {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--panel-border);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            width: 80%;
+            text-align: center;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+        }
+
+        #game-screen { display: none; width: 100%; max-width: 1000px; }
+
+        .game-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        /* Neater, Scannable Interface Components */
+        .glass-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 12px;
+            box-sizing: border-box;
+        }
+
+        .status-strip {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 94vw;
+            height: 94vw;
+            max-width: 460px;
+            max-height: 460px;
+            border: 4px solid #1a202c;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        }
+
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .light { background-color: var(--board-light); }
+        .dark { background-color: var(--board-dark); }
+
+        /* Highly Visible Token Graphics */
+        .token {
+            width: 84%;
+            height: 84%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.2rem;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+            z-index: 2;
+        }
+
+        @media (max-width: 480px) { .token { font-size: 1.7rem; } }
+
+        .token-W { background: radial-gradient(circle, #ffffff 70%, #cbd5e0 100%); color: #1a202c; border: 2px solid #fff; }
+        .token-B { background: radial-gradient(circle, #2d3748 60%, #11141a 100%); color: #ffffff; border: 2px solid #4a5568; }
+
+        .selected .token { transform: scale(1.08); box-shadow: 0 0 0 3px var(--accent-gold); }
+        .highlighted::after {
+            content: ''; width: 14px; height: 14px; background: var(--accent-gold); border-radius: 50%; position: absolute; z-index: 5;
+        }
+
+        /* Modifiers */
+        .frozen::after { content: '❄️'; position: absolute; bottom: 2px; right: 2px; font-size: 1rem; z-index: 10; }
+        .shielded { box-shadow: 0 0 0 3px var(--accent-glow) !important; }
+        .camo { opacity: 0.45; box-shadow: 0 0 0 3px #48bb78 !important; }
+        .mined::before { content: '💣'; position: absolute; top: 2px; left: 2px; font-size: 1rem; z-index: 10; }
+
+        /* Hands Interface & Hidden Cards Layout */
+        .hand-section { width: 100%; min-width: 290px; max-width: 460px; display: flex; flex-direction: column; gap: 8px; }
+        .cards-list { display: flex; gap: 8px; flex-wrap: wrap; min-height: 70px; }
+
+        .card {
+            background: linear-gradient(135deg, #232735 0%, #151720 100%);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 8px;
+            width: calc(50% - 4px);
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .card:hover { transform: translateY(-2px); border-color: var(--accent-gold); }
+        .card-title { font-weight: bold; font-size: 0.85rem; color: var(--accent-gold); margin-bottom: 2px; }
+        .card-desc { font-size: 0.72rem; color: #a0aec0; line-height: 1.2; }
+
+        /* Facedown Hidden Cards */
+        .card-facedown {
+            background: var(--card-back);
+            border: 1px dashed rgba(255,255,255,0.2);
+            border-radius: 8px;
+            width: calc(50% - 4px);
+            height: 55px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        button.action-btn {
+            background: #2b6cb0; border: none; color: white; padding: 10px 20px; font-weight: bold; border-radius: 8px; cursor: pointer;
+        }
+        button.action-btn:hover { background: #3182ce; }
+
+        .overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;
+        }
+        .modal { background: #171923; padding: 20px; border-radius: 12px; border: 2px solid var(--accent-gold); text-align: center; width: 90%; max-width: 400px; }
+        .draft-row { display: flex; gap: 8px; margin-top: 15px; justify-content: center; }
+        .draft-item { background: #2d3748; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; width: 30%; }
+        .draft-item:hover { border: 1px solid var(--accent-gold); }
+    </style>
+</head>
+<body>
+
+    <!-- Menu / Matchmaking View -->
+    <div id="menu-screen">
+        <h1 style="margin-bottom: 5px; font-size: 2rem; background: linear-gradient(to right, #ecc94b, #3182ce); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">PARADOX CHESS</h1>
+        <p style="color: #718096; margin-top: 0; font-size: 0.9rem;">Cross-Device Real-Time Tactical Variant</p>
+        
+        <div class="menu-card">
+            <h3>Host a New Match</h3>
+            <button class="action-btn" onclick="hostGame()">Generate Room ID</button>
+            <div id="host-id-display" style="margin-top: 10px; font-weight: bold; color: var(--accent-gold); font-size: 1.2rem;"></div>
+        </div>
+
+        <div class="menu-card">
+            <h3>Join Existing Match</h3>
+            <input type="text" id="join-room-input" placeholder="Enter Room ID">
+            <button class="action-btn" style="background:#2f855a;" onclick="joinGame()">Connect & Play</button>
+        </div>
+    </div>
+
+    <!-- Active Game View -->
+    <div id="game-screen">
+        <div class="status-strip glass-panel">
+            <div id="role-indicator" style="color: var(--accent-gold);">Assigning Side...</div>
+            <div id="turn-indicator">Waiting for Connection...</div>
+            <div id="net-status" style="color: #e53e3e; font-size: 0.8rem;">● Offline</div>
+        </div>
+
+        <div class="game-layout">
+            <div class="board-container">
+                <div class="board" id="board"></div>
+            </div>
+
+            <div class="side-interface" style="display:flex; flex-direction:column; gap:15px;">
+                <div class="hand-section glass-panel">
+                    <h4 style="margin: 0 0 5px 0; font-size: 0.85rem; color:#a0aec0;">Your Strategy Hand</h4>
+                    <div class="cards-list" id="my-hand"></div>
+                </div>
+                <div class="hand-section glass-panel">
+                    <h4 style="margin: 0 0 5px 0; font-size: 0.85rem; color:#a0aec0;">Opponent's Hidden Resources</h4>
+                    <div class="cards-list" id="opponent-hand"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draft Modal Overlay -->
+    <div class="overlay" id="draft-overlay">
+        <div class="modal">
+            <h3 style="margin:0; color:var(--accent-gold);">Tactical Choice</h3>
+            <p style="font-size:0.8rem; color:#a0aec0; margin:5px 0;">Select an ability to add to your hidden hand.</p>
+            <div class="draft-row" id="draft-options"></div>
+        </div>
+    </div>
+
+    <script>
+        const glyphs = { 'P': '♟', 'N': '♞', 'B': '♝', 'R': '♜', 'Q': '♛', 'K': '♚' };
+        
+        // 12 Diverse Tactical Abilities across spatial controls, physical hazards, and rule anomalies
+        const DECK = [
+            { id: 1, name: "Freeze", desc: "Freeze an enemy piece for one full turn sequence." },
+            { id: 2, name: "Demote", desc: "Degrade an enemy unit (Queen → Rook → Knight)." },
+            { id: 3, name: "Reinforce", desc: "Spawn a new friendly Pawn on your home rank row." },
+            { id: 4, name: "Phase Swap", desc: "Swap spaces of two friendly non-King units." },
+            { id: 5, name: "Quantum Blink", desc: "Teleport any friendly unit into an adjacent empty tile." },
+            { id: 6, name: "Pawn Sniper", desc: "Instantly eliminate any chosen enemy Pawn asset." },
+            { id: 7, name: "Ascend", desc: "Instantly transform one of your Pawns into a Knight." },
+            { id: 8, name: "Spike Shield", desc: "Shield a unit. If captured, the attacker is destroyed." },
+            { id: 9, name: "Camouflage", desc: "Target allied unit cannot be captured until your next turn." },
+            { id: 10, name: "Gust", desc: "Slide any piece on the board into an adjacent empty space." },
+            { id: 11, name: "Landmine", desc: "Plant a hidden explosive. Blows up the next piece to step here." },
+            { id: 12, name: "Alchemist", desc: "Mutate one of your active Pawns into a Bishop." }
+        ];
+
+        let peer = null, conn = null;
+        let localRole = null; // 'W' (Host) or 'B' (Joiner)
+        let gameState = {
+            board: [
+                'BR', 'BN', 'BB', 'BQ', 'BK', 'BB', 'BN', 'BR', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP',
+                '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+                '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+                'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WR', 'WN', 'WB', 'WQ', 'WK', 'WB', 'WN', 'WR'
+            ],
+            turn: 'W', moveCount: 0, gameOver: false,
+            hands: { W: [], B: [] }, frozen: { W: null, B: null },
+            shields: Array(64).fill(false), camos: Array(64).fill(false), mines: Array(64).fill(false)
+        };
+
+        let selectedSquare = null; let validMoves = []; let activeCardEffect = null;
+
+        // --- Network Layer Engine (PeerJS WebRTC Connection) ---
+        function hostGame() {
+            const roomId = 'px-' + Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('host-id-display').innerText = `Room ID: ${roomId}`;
+            initPeer(roomId); localRole = 'W';
+        }
+
+        function joinGame() {
+            const roomId = document.getElementById('join-room-input').value.trim();
+            if(!roomId) return alert("Please enter a valid room ID");
+            initPeer(null); localRole = 'B';
+            
+            setTimeout(() => {
+                conn = peer.connect(roomId);
+                setupConnection();
+            }, 800);
+        }
+
+        function initPeer(id) {
+            peer = id ? new Peer(id) : new Peer();
+            peer.on('open', () => {
+                if(localRole === 'W') {
+                    document.getElementById('role-indicator').innerText = "Role: White (Host)";
+                    document.getElementById('net-status').innerText = "● Waiting...";
+                    document.getElementById('net-status').style.color = "#ecc94b";
+                }
+            });
+            peer.on('connection', (c) => {
+                if(localRole === 'W') {
+                    conn = c;
+                    setupConnection();
+                    // Generate initial cards for both hands and trigger setup sync
+                    gameState.hands.W.push(getRandomCard(), getRandomCard());
+                    gameState.hands.B.push(getRandomCard(), getRandomCard());
+                    sendState();
+                }
+            });
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                document.getElementById('menu-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'block';
+                document.getElementById('net-status').innerText = "● Connected";
+                document.getElementById('net-status').style.color = "#38a169";
+                if(localRole === 'B') document.getElementById('role-indicator').innerText = "Role: Black (Guest)";
+                renderBoard(); renderHands(); updateStatusUI();
+            });
+            conn.on('data', (data) => {
+                if(data.type === 'SYNC') {
+                    gameState = data.payload;
+                    renderBoard(); renderHands(); updateStatusUI(); checkDraftTriggers();
+                }
+            });
+        }
+
+        function sendState() { if(conn) conn.send({ type: 'SYNC', payload: gameState }); }
+        function getRandomCard() { return DECK[Math.floor(Math.random() * DECK.length)]; }
+
+        // --- Core Rendering & UI Logic ---
+        function updateStatusUI() {
+            const turnText = gameState.turn === 'W' ? "White's Turn" : "Black's Turn";
+            document.getElementById('turn-indicator').innerText = `${turnText} (Move ${gameState.moveCount})`;
+            if(gameState.gameOver) document.getElementById('turn-indicator').innerText = "Game Over!";
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board'); boardEl.innerHTML = '';
+            for (let i = 0; i < 64; i++) {
+                const square = document.createElement('div');
+                const row = Math.floor(i / 8); const col = i % 8;
+                square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                
+                if (selectedSquare === i) square.classList.add('selected');
+                if (validMoves.includes(i)) square.classList.add('highlighted');
+                if (gameState.frozen.W === i || gameState.frozen.B === i) square.classList.add('frozen');
+
+                const piece = gameState.board[i];
+                if (piece) {
+                    const token = document.createElement('div');
+                    token.className = `token token-${piece[0]}`;
+                    if (gameState.shields[i]) token.classList.add('shielded');
+                    if (gameState.camos[i]) token.classList.add('camo');
+                    token.innerText = glyphs[piece[1]] || '';
+                    square.appendChild(token);
+                }
+
+                // Only show landmines to the player who planted them
+                if (gameState.mines[i] && piece && piece[0] === localRole) square.classList.add('mined');
+                
+                square.addEventListener('click', () => handleSquareClick(i));
+                boardEl.appendChild(square);
+            }
+        }
+
+        // Hidden Hands Evaluation Logic
+        function renderHands() {
+            const myHandContainer = document.getElementById('my-hand');
+            const oppHandContainer = document.getElementById('opponent-hand');
+            myHandContainer.innerHTML = ''; oppHandContainer.innerHTML = '';
+
+            const myRole = localRole;
+            const oppRole = localRole === 'W' ? 'B' : 'W';
+
+            // Render local visible operational cards
+            gameState.hands[myRole].forEach((card, idx) => {
+                const el = document.createElement('div'); el.className = 'card';
+                el.innerHTML = `<div class="card-title">${card.name}</div><div class="card-desc">${card.desc}</div>`;
+                el.addEventListener('click', () => useCard(idx));
+                myHandContainer.appendChild(el);
+            });
+
+            // Render opponent's card backs to keep them hidden but trackable
+            gameState.hands[oppRole].forEach(() => {
+                const el = document.createElement('div'); el.className = 'card-facedown';
+                el.innerText = '✨';
+                oppHandContainer.appendChild(el);
+            });
+        }
+
+        // --- Combat Actions Handling ---
+        function handleSquareClick(idx) {
+            if (gameState.gameOver || gameState.turn !== localRole) return;
+            if (activeCardEffect) { handleCardTargeting(idx); return; }
+
+            const piece = gameState.board[idx];
+            if (piece && piece[0] === localRole && (gameState.frozen.W === idx || gameState.frozen.B === idx)) return;
+
+            if (selectedSquare === null) {
+                if (piece && piece[0] === localRole) {
+                    selectedSquare = idx; validMoves = generateValidMoves(idx, gameState.board); renderBoard();
+                }
+            } else {
+                if (validMoves.includes(idx)) { executeMove(selectedSquare, idx); }
+                else if (piece && piece[0] === localRole) {
+                    selectedSquare = idx; validMoves = generateValidMoves(idx, gameState.board); renderBoard();
+                } else { selectedSquare = null; validMoves = []; renderBoard(); }
+            }
+        }
+
+        function executeMove(from, to) {
+            const piece = gameState.board[from]; const target = gameState.board[to];
+            
+            if (target && gameState.camos[to] && target[0] !== piece[0]) return;
+            if (target && gameState.shields[to] && target[0] !== piece[0]) {
+                gameState.shields[to] = false; gameState.board[from] = '';
+                selectedSquare = null; validMoves = []; endTurnSequence(); return;
+            }
+            if (target && target[1] === 'K') {
+                gameState.board[to] = piece; gameState.board[from] = ''; gameState.gameOver = true;
+                renderBoard(); sendState(); alert(`${localRole === 'W' ? 'White' : 'Black'} Wins via King Capture!`); return;
+            }
+
+            gameState.shields[to] = gameState.shields[from]; gameState.shields[from] = false;
+            gameState.camos[to] = gameState.camos[from]; gameState.camos[from] = false;
+            gameState.board[to] = piece; gameState.board[from] = '';
+
+            if (gameState.mines[to]) { gameState.board[to] = ''; gameState.mines[to] = false; }
+            if (piece === 'WP' && Math.floor(to / 8) === 0) gameState.board[to] = 'WQ';
+            if (piece === 'BP' && Math.floor(to / 8) === 7) gameState.board[to] = 'BQ';
+
+            gameState.frozen[localRole] = null; selectedSquare = null; validMoves = [];
+            endTurnSequence();
+        }
+
+        function useCard(idx) {
+            if (gameState.turn !== localRole || gameState.gameOver) return;
+            activeCardEffect = { idx, card: gameState.hands[localRole][idx] };
+            document.getElementById('role-indicator').innerText = `Targeting: ${activeCardEffect.card.name}`;
+        }
+
+        function handleCardTargeting(idx) {
+            const cardId = activeCardEffect.card.id; const enemy = localRole === 'W' ? 'B' : 'W';
+            const piece = gameState.board[idx]; let validPlay = false;
+
+            if (cardId === 1 && piece && piece[0] === enemy && piece[1] !== 'K') { gameState.frozen[enemy] = idx; validPlay = true; }
+            else if (cardId === 2 && piece && piece[0] === enemy) {
+                if (piece[1] === 'Q') { gameState.board[idx] = enemy + 'R'; validPlay = true; }
+                else if (piece[1] === 'R') { gameState.board[idx] = enemy + 'N'; validPlay = true; }
+            }
+            else if (cardId === 3 && !piece && Math.floor(idx / 8) === (localRole === 'W' ? 7 : 0)) { gameState.board[idx] = localRole + 'P'; validPlay = true; }
+            else if (cardId === 6 && piece && piece[0] === enemy && piece[1] === 'P') { gameState.board[idx] = ''; validPlay = true; }
+            else if (cardId === 7 && piece && piece[0] === localRole && piece[1] === 'P') { gameState.board[idx] = localRole + 'N'; validPlay = true; }
+            else if (cardId === 8 && piece && piece[0] === localRole) { gameState.shields[idx] = true; validPlay = true; }
+            else if (cardId === 9 && piece && piece[0] === localRole) { gameState.camos[idx] = true; validPlay = true; }
+            else if (cardId === 11 && !piece) { gameState.mines[idx] = true; validPlay = true; }
+            else if (cardId === 12 && piece && piece[0] === localRole && piece[1] === 'P') { gameState.board[idx] = localRole + 'B'; validPlay = true; }
+
+            if (validPlay) {
+                gameState.hands[localRole].splice(activeCardEffect.idx, 1);
+                document.getElementById('role-indicator').innerText = `Role: ${localRole === 'W' ? 'White' : 'Black'}`;
+                activeCardEffect = null; renderHands(); renderBoard(); sendState();
+            }
+        }
+
+        function endTurnSequence() {
+            gameState.turn = gameState.turn === 'W' ? 'B' : 'W'; gameState.moveCount++;
+            for(let i=0; i<64; i++) { if(gameState.board[i] && gameState.board[i][0] === gameState.turn) gameState.camos[i] = false; }
+            checkDraftTriggers(); updateStatusUI(); renderBoard(); renderHands(); sendState();
+        }
+
+        function checkDraftTriggers() {
+            if (gameState.moveCount > 0 && gameState.moveCount % 4 === 0 && !gameState.gameOver) {
+                triggerDraftPhase();
+            }
+        }
+
+        function triggerDraftPhase() {
+            const overlay = document.getElementById('draft-overlay'); const container = document.getElementById('draft-options');
+            container.innerHTML = ''; let opts = [getRandomCard(), getRandomCard(), getRandomCard()];
+            overlay.style.display = 'flex';
+            opts.forEach(card => {
+                const item = document.createElement('div'); item.className = 'draft-item';
+                item.innerHTML = `<strong>${card.name}</strong>`;
+                item.addEventListener('click', () => {
+                    gameState.hands[localRole].push(card); overlay.style.display = 'none';
+                    renderHands(); sendState();
+                });
+                container.appendChild(item);
+            });
+        }
+
+        function generateValidMoves(idx, state) {
+            const piece = state[idx]; if (!piece) return [];
+            const color = piece[0]; const type = piece[1]; const moves = [];
+            const row = Math.floor(idx / 8); const col = idx % 8;
+            const check = (r, c) => {
+                if (r < 0 || r >= 8 || c < 0 || c >= 8) return false; const t = r * 8 + c;
+                if (!state[t]) { moves.push(t); return true; } if (state[t][0] !== color && !gameState.camos[t]) { moves.push(t); return false; } return false;
+            };
+            if (type === 'P') {
+                const d = color === 'W' ? -1 : 1;
+                if (row+d >= 0 && row+d < 8 && !state[(row+d)*8+col]) { moves.push((row+d)*8+col); if (row === (color === 'W' ? 6 : 1) && !state[(row+d*2)*8+col]) moves.push((row+d*2)*8+col); }
+                [-1, 1].forEach(dc => { if (col+dc >= 0 && col+dc < 8 && state[(row+d)*8+col+dc] && state[(row+d)*8+col+dc][0] !== color && !gameState.camos[(row+d)*8+col+dc]) moves.push((row+d)*8+col+dc); });
+            } else if (type === 'N') {
+                [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr, dc]) => check(row + dr, col + dc));
+            } else if (type === 'B' || type === 'Q') {
+                [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr, dc]) => { let r=row+dr, c=col+dc; while(r>=0&&r<8&&c>=0&&c<8) { if(!check(r,c)) break; r+=dr; c+=dc; } });
+            }
+            if (type === 'R' || type === 'Q') {
+                [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr, dc]) => { let r=row+dr, c=col+dc; while(r>=0&&r<8&&c>=0&&c<8) { if(!check(r,c)) break; r+=dr; c+=dc; } });
+            } else if (type === 'K') {
+                for (let dr=-1; dr<=1; dr++) for (let dc=-1; dc<=1; dc++) if (dr!==0||dc!==0) check(row+dr, col+dc);
+            }
+            return moves;
+        }
+    </script>
+</body>
+</html>
